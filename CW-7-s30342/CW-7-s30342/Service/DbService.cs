@@ -93,8 +93,8 @@ public class DbService(IConfiguration config) : IDbService
                 DateFrom = reader.GetDateTime(3),
                 DateTo = reader.GetDateTime(4),
                 MaxPeople = reader.GetInt32(5),
-                RegisteredAt = reader.GetDateTime(6),
-                PaymentDate = reader.IsDBNull(7) ? null : reader.GetDateTime(8)
+                RegisteredAt = reader.GetInt32(6),
+                PaymentDate = reader.IsDBNull(7) ? null : reader.GetInt32(8)
             });
         }
 
@@ -178,7 +178,8 @@ public class DbService(IConfiguration config) : IDbService
        
         command.Parameters.AddWithValue("@IdClient", clientId);
         command.Parameters.AddWithValue("@IdTrip", tripId);
-        command.Parameters.AddWithValue("@RegisteredAt", DateTime.Now);
+        //zakładam, że RegistredAt oznacza ile dni temu zostało zarejestrowane z powodu tego, że w zad jest int
+        command.Parameters.AddWithValue("@RegisteredAt", 0);
         await command.ExecuteNonQueryAsync();
     }
 
