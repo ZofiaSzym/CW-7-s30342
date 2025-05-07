@@ -106,6 +106,7 @@ public class DbService(IConfiguration config) : IDbService
     {
         var connectionString = config.GetConnectionString("Default");
         await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync();
         
         //tworzenie n owego klienta z wartościami podanymi (oprócz id
         var sql = @"INSERT INTO Client ( FirstName, LastName, Email, Telephone, Pesel) VALUES
@@ -117,8 +118,7 @@ public class DbService(IConfiguration config) : IDbService
         command.Parameters.AddWithValue("@Telephone", client.Telephone);
         command.Parameters.AddWithValue("@Pesel", client.Pesel);
         
-        await connection.OpenAsync();
-        //popraw to!!!
+        
         var idClient = Convert.ToInt32(await command.ExecuteScalarAsync());
         return new ClientGetDTO()
         {
