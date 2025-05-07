@@ -7,11 +7,12 @@ namespace CW_7_s30342.Controllers;
 
 [ApiController]
 [Route("api/trips")]
-public class TripController(IDbService service) :ControllerBase
+public class TripController(IDbService _service) :ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> GetAllTripsWithCountries()
     {
-        return Ok(await service.getTripCountriesAsync());
+        var trips = _service.GetTripCountriesAsync();
+        return Ok(trips);
     }
 }
