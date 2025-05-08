@@ -31,6 +31,7 @@ public class DbService(IConfiguration config) : IDbService
         await connection.OpenAsync();
         await using var reader = await command.ExecuteReaderAsync();
 
+        //aby zwrócić te wycieczki
         while (await reader.ReadAsync())
         {
             results.Add(new TripCountryGetDTO()
@@ -76,6 +77,7 @@ public class DbService(IConfiguration config) : IDbService
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.AddWithValue("@IdClient", idClient);
         await using var reader = await command.ExecuteReaderAsync();
+        //aby zwrócić te wycieczki
         while (await reader.ReadAsync())
         {
             results.Add(new ClientTripsGetDTO()
@@ -112,6 +114,7 @@ public class DbService(IConfiguration config) : IDbService
         await connection.OpenAsync();
         var idClient = Convert.ToInt32(await command.ExecuteScalarAsync());
         
+        //zwracanie klienta:)
         return new Client
         {
             IdClient = idClient,
@@ -121,8 +124,7 @@ public class DbService(IConfiguration config) : IDbService
             Telephone = client.Telephone,
             Pesel = client.Pesel,
         };
-
-
+        
     }
 
     //endpoint ten pozwala na włożenie ooby na wyciueczkę
@@ -154,7 +156,7 @@ public class DbService(IConfiguration config) : IDbService
         maxClients = reader.GetInt32(0);
     }
 
-    //liczy klientów na wycieczce
+    //liczy klientów na wycieczce porównuje do wcześniej zapamiętanego limitu osób
     var sqlTripClient = "SELECT COUNT(*) FROM Client_Trip WHERE IdTrip = @IdTrip";
     await using (var commandTripClient = new SqlCommand(sqlTripClient, connection))
     {
@@ -171,12 +173,12 @@ public class DbService(IConfiguration config) : IDbService
     {
         command.Parameters.AddWithValue("@IdClient", clientId);
         command.Parameters.AddWithValue("@IdTrip", tripId);
-        command.Parameters.AddWithValue("@RegisteredAt", 0); // Assuming 0 is correct
+        command.Parameters.AddWithValue("@RegisteredAt", 0); // W poleceniu napisane jest, aby podać aktualną datę, jednak w danych wykresu jest int. Założyłam więc, że wkładamy 0 i traktujemy to "ile dni minęło od zarejestrowania"  
         await command.ExecuteNonQueryAsync();
     }
 }
 
-    //usuwamy klienta z wycieczki podając dane zarówno niego jak i wycieczki
+    //usuwamy klienta z wycieczki podając dane jego i wycieczki
     public async Task DeleteClientFromTripAsync(int clientId, int tripId)
     {
         var connectionString = config.GetConnectionString("Default");
@@ -202,6 +204,5 @@ public class DbService(IConfiguration config) : IDbService
         command2.Parameters.AddWithValue("@IdTrip", tripId);
         command2.Parameters.AddWithValue("@IdClient", clientId);
         await command2.ExecuteNonQueryAsync();
-        
     }
 }

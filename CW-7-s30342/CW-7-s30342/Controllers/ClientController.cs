@@ -7,14 +7,14 @@ namespace CW_7_s30342.Controllers;
 
 [ApiController]
 [Route("api/clients")]
-public class ClientController(IDbService _service) : ControllerBase
+public class ClientController(IDbService service) : ControllerBase
 {
     [HttpGet("{id}/trips")]
     public async Task<IActionResult> GetClientTrips(int id)
     {
         try
         {
-            var trips = await _service.GetClientTripsAsync(id);
+            var trips = await service.GetClientTripsAsync(id);
             return Ok(trips);
         }
         catch (NotFoundException ex)
@@ -27,7 +27,7 @@ public class ClientController(IDbService _service) : ControllerBase
     public async Task<IActionResult> CreateClient(
         [FromBody] ClientCreateDTO body)
     {
-        var client = await _service.CreateClientAsync(body);
+        var client = await service.CreateClientAsync(body);
         return Created($"/api/clients/{client.IdClient}",client);
     }
 
@@ -38,7 +38,7 @@ public class ClientController(IDbService _service) : ControllerBase
     {
         try
         {
-            await _service.PutClientToTripAsync(id, tripId);
+            await service.PutClientToTripAsync(id, tripId);
             return NoContent();
         }
         catch (NotFoundException ex)
@@ -62,7 +62,7 @@ public class ClientController(IDbService _service) : ControllerBase
         
         try
         {
-            await _service.DeleteClientFromTripAsync(id, tripId);
+            await service.DeleteClientFromTripAsync(id, tripId);
             return NoContent();
         }
         catch (NotFoundException e)

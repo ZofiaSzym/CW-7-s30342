@@ -4,10 +4,10 @@ namespace CW_7_s30342.Models;
 
 public class TripCreateDTO
 {
-    [Length(3, 25)]
+    [MaxLength(120)]
     [Required]
     public string Name { get; set; }
-    [Length(10, 100)]
+    [MaxLength(120)]
     [Required]
     public string Description { get; set; }
     [DataType(DataType.Date)]
