@@ -100,7 +100,7 @@ public class DbService(IConfiguration config) : IDbService
         var connectionString = config.GetConnectionString("Default");
         await using var connection = new SqlConnection(connectionString);
         
-        //tworzenie nowego klienta z wartościami podanymi (oprócz id
+        //tworzenie nowego klienta z wartościami podanymi (oprócz id)
         var sql = @"INSERT INTO Client ( FirstName, LastName, Email, Telephone, Pesel) VALUES
                    (  @FirstName, @LastName, @Email, @Telephone, @Pesel); SELECT scope_identity()";
         await using var command = new SqlCommand(sql, connection);
@@ -164,7 +164,7 @@ public class DbService(IConfiguration config) : IDbService
             throw new MaxPeopleException($"There are already {clientsCurrently} clients on the trip (max: {maxClients})");
     }
 
-    // 4. Insert new client-trip relation
+    //dodajemy go na wycieczke :)
     var sql = @"INSERT INTO Client_Trip (IdClient, IdTrip, RegisteredAt) 
                 VALUES (@IdClient, @IdTrip, @RegisteredAt)";
     await using (var command = new SqlCommand(sql, connection))
@@ -187,11 +187,15 @@ public class DbService(IConfiguration config) : IDbService
         command.Parameters.AddWithValue("@IdTrip", tripId);
         command.Parameters.AddWithValue("@IdClient", clientId);
         await connection.OpenAsync();
-        await using var reader = await command.ExecuteReaderAsync();
-        if (!await reader.ReadAsync())
+        await using (var reader = await command.ExecuteReaderAsync())
         {
-            throw new NotFoundException($"Client {clientId} isn't going to that trip. Check if you didn't misspell anything"); 
+            if (!await reader.ReadAsync())
+            {
+                throw new NotFoundException(
+                    $"Client {clientId} isn't going to that trip. Check if you didn't misspell anything");
+            }
         }
+
         //usuwamy go
         var sql2 = "DELETE FROM Client_Trip WHERE IdTrip = @IdTrip AND IdClient = @IdClient";
         var command2 = new SqlCommand(sql2, connection);
