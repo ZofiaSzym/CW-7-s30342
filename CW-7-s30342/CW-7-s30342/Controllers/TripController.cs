@@ -12,7 +12,6 @@ public class TripController(IDbService _service) :ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAllTripsWithCountries()
     {
-        var trips = _service.GetTripCountriesAsync();
-        return Ok(trips);
+        return Ok(await _service.GetTripCountriesAsync() );
     }
 }

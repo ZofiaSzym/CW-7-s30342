@@ -9,7 +9,7 @@ public interface IDbService
 {
     public Task<IEnumerable<TripCountryGetDTO>> GetTripCountriesAsync();
     public Task<IEnumerable<ClientTripsGetDTO>> GetClientTripsAsync(int idClient);
-    public Task<ClientGetDTO> CreateClientAsync(ClientCreateDTO client);
+    public Task<Client> CreateClientAsync(ClientCreateDTO client);
     public Task PutClientToTripAsync(int clientId, int tripId);
     public Task DeleteClientFromTripAsync(int clientId, int tripId);
 }
@@ -23,7 +23,7 @@ public class DbService(IConfiguration config) : IDbService
         var connectionString = config.GetConnectionString("Default");
         await using var connection = new SqlConnection(connectionString);
         //łączenie tabel Trip -> country_trip_> country pozwala nam wypisać dane wycieczki + połączonego z nią kraju
-        var sql = @"SELECT t.IdTrip, t.Name, t.Description, t.DateFrom, t.DateTo, t.MaxPeople, c.IdCountry, c.Name  FROM Trip
+        var sql = @"SELECT t.IdTrip, t.Name, t.Description, t.DateFrom, t.DateTo, t.MaxPeople, c.IdCountry, c.Name  FROM Trip t
                         INNER JOIN Country_Trip ct ON t.IdTrip= ct.IdTrip
                         INNER JOIN Country c ON c.IdCountry= ct.IdCountry";
         await using var command = new SqlCommand(sql, connection);
@@ -52,37 +52,30 @@ public class DbService(IConfiguration config) : IDbService
     // GetClientTripsAsync daj nam wszystkie wycieczki jednego klienta
     public async Task<IEnumerable<ClientTripsGetDTO>> GetClientTripsAsync(int idClient)
     {
-        var results = new List<ClientTripsGetDTO>();
+        
         var connectionString = config.GetConnectionString("Default");
-        await using var connection = new SqlConnection(connectionString);
+        await using var connection = new SqlConnection(connectionString); ;
+        // sprawdzamy czy taki klient istnieje
+        var sql2 = "SELECT 1 FROM CLIENT WHERE IdClient = @IdClient";
+        await using var command2 = new SqlCommand(sql2, connection);
+        command2.Parameters.AddWithValue("@IdClient", idClient);
+        await connection.OpenAsync();
+        await using (var reader2 = await command2.ExecuteReaderAsync())
+        {
+            if (!reader2.HasRows)
+            {
+                throw new NotFoundException($"No such client with id {idClient}");
+            }
+        }
+
         //zapytanie to zapamiętuje dane wycieczki jeżeli powiązany jest z nią nasz klient
-        var sql = @"SELECT t.IdTrip, t.Name, t.Description, t.DateFrom, t.DateTo, t.MaxPeople, ct.registeredAt, ct.PaymentDate  FROM Trip
+        var results = new List<ClientTripsGetDTO>();
+        var sql = @"SELECT t.IdTrip, t.Name, t.Description, t.DateFrom, t.DateTo, t.MaxPeople, ct.registeredAt, ct.PaymentDate  FROM Trip t
                         INNER JOIN Client_Trip ct ON t.IdTrip= ct.IdTrip
                       WHERE ct.IdClient= @IdClient";
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.AddWithValue("@IdClient", idClient);
-        
-        await connection.OpenAsync();
-        
         await using var reader = await command.ExecuteReaderAsync();
-
-        if (!await reader.ReadAsync())
-        {
-            var result = new List<ClientGetDTO>();
-            //jeżeli okazuje się że żadnych danych nie wczytało - sprawdzamy czy taki klient istnieje
-           var sql2 = "SELECT 1 FROM CLIENT WHERE IdClient = @IdClient";
-
-            await using var command2 = new SqlCommand(sql2, connection);
-            command2.Parameters.AddWithValue("@IdClient", idClient);
-            await connection.OpenAsync();
-            await using var reader2 = await command2.ExecuteReaderAsync();
-            if (!await reader2.ReadAsync())
-            {
-               throw new NotFoundException($"No such client with id {idClient}"); 
-            }
-            throw new NotFoundException($"Client with id {idClient} has no trips");
-        }
-        
         while (await reader.ReadAsync())
         {
             results.Add(new ClientTripsGetDTO()
@@ -94,7 +87,7 @@ public class DbService(IConfiguration config) : IDbService
                 DateTo = reader.GetDateTime(4),
                 MaxPeople = reader.GetInt32(5),
                 RegisteredAt = reader.GetInt32(6),
-                PaymentDate = reader.IsDBNull(7) ? null : reader.GetInt32(8)
+                PaymentDate = reader.IsDBNull(7) ? null : reader.GetInt32(7)
             });
         }
 
@@ -102,25 +95,24 @@ public class DbService(IConfiguration config) : IDbService
     }
 
     //tworzy nowego klienta. 
-    public async Task<ClientGetDTO> CreateClientAsync(ClientCreateDTO client)
+    public async Task<Client> CreateClientAsync(ClientCreateDTO client)
     {
         var connectionString = config.GetConnectionString("Default");
         await using var connection = new SqlConnection(connectionString);
-        await connection.OpenAsync();
         
-        //tworzenie n owego klienta z wartościami podanymi (oprócz id
+        //tworzenie nowego klienta z wartościami podanymi (oprócz id
         var sql = @"INSERT INTO Client ( FirstName, LastName, Email, Telephone, Pesel) VALUES
-                   ( @FirstName, @LastName, @Email, @Telephone, @Pesel) SELECT scope_identity()";
+                   (  @FirstName, @LastName, @Email, @Telephone, @Pesel); SELECT scope_identity()";
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.AddWithValue("@FirstName", client.FirstName);
         command.Parameters.AddWithValue("@LastName", client.LastName);
         command.Parameters.AddWithValue("@Email", client.Email);
         command.Parameters.AddWithValue("@Telephone", client.Telephone);
-        command.Parameters.AddWithValue("@Pesel", client.Pesel);
-        
-        
+        command.Parameters.AddWithValue("@Pesel", client.Pesel);        
+        await connection.OpenAsync();
         var idClient = Convert.ToInt32(await command.ExecuteScalarAsync());
-        return new ClientGetDTO()
+        
+        return new Client
         {
             IdClient = idClient,
             FirstName = client.FirstName,
@@ -134,54 +126,55 @@ public class DbService(IConfiguration config) : IDbService
     }
 
     //endpoint ten pozwala na włożenie ooby na wyciueczkę
-    public async Task PutClientToTripAsync(int clientId, int tripId)
+   public async Task PutClientToTripAsync(int clientId, int tripId)
+{
+    var connectionString = config.GetConnectionString("Default");
+    await using var connection = new SqlConnection(connectionString);
+    await connection.OpenAsync();
+    int maxClients = 0;
+
+    // Sprawdza czy kilent istnieje
+    var sqlClient = "SELECT 1 FROM CLIENT WHERE IdClient = @IdClient";
+    await using (var commandClient = new SqlCommand(sqlClient, connection))
     {
-        var connectionString = config.GetConnectionString("Default");
-        await using var connection = new SqlConnection(connectionString);
-        await connection.OpenAsync();
-        //podstawowy insert łączący klienta z wycieczką w momencie aktualnej daty
-        var sql = @"INSERT INTO Client_Trip (IdClient, IdTrip, RegisteredAt) VALUES
-                   (@IdClient, @IdTrip, @RegisteredAt) SELECT scope_identity()";
-        await using var command = new SqlCommand(sql, connection);
-        
-        //sprawdzamy czy klient istnieje, jeżeli nie wyrzucamy błąd
-        var sqlClient = "SELECT 1 FROM CLIENT WHERE IdClient = @IdClient";
-        await using var commandClient = new SqlCommand(sql, connection);
         commandClient.Parameters.AddWithValue("@IdClient", clientId);
-        
-        await using var reader2 = await commandClient.ExecuteReaderAsync();
-        if (!await reader2.ReadAsync())
-        {
-            throw new NotFoundException($"No such client with id {clientId}"); 
-        }
-        //sprawdzamy czy wycieczka istnieje 
-        var sqlTrip = "SELECT maxPeople FROM Trip WHERE IdTrip = @IdTrip";
-        await using var commandTrip = new SqlCommand(sqlTrip, connection);
+        await using var reader = await commandClient.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+            throw new NotFoundException($"No such client with id {clientId}");
+    }
+
+    // Sprawdza czy wycieczka istnieje
+    var sqlTrip = "SELECT maxPeople FROM Trip WHERE IdTrip = @IdTrip";
+    await using (var commandTrip = new SqlCommand(sqlTrip, connection))
+    {
         commandTrip.Parameters.AddWithValue("@IdTrip", tripId);
-        await using var readerTrip = await commandClient.ExecuteReaderAsync();
-        if (!await readerTrip.ReadAsync())
-        {
-            throw new NotFoundException($"No such trip with id {tripId}"); 
-        }
-        var maxClients = readerTrip.GetInt32(0);
-        
-        //sprawdzamy czy maksimum ludzi na wycieczce nie zostało już spełnione
-        var sqlTripClient = "SELECT COUNT(*) FROM Client_Trip WHERE IdTrip = @IdTrip";
-        await using var commandTripClient = new SqlCommand(sqlTripClient, connection);
-        commandTrip.Parameters.AddWithValue("@IdTrip", tripId);
-        await using var readerTripClient = await commandClient.ExecuteReaderAsync();
-       var clientsCurrently = readerTripClient.GetInt32(0);
-       if (clientsCurrently >= maxClients)
-       {
-           throw new MaxPeopleException($"There is already {maxClients} clients on the trip");
-       }
-       
+        await using var reader = await commandTrip.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+            throw new NotFoundException($"No such trip with id {tripId}");
+        maxClients = reader.GetInt32(0);
+    }
+
+    //liczy klientów na wycieczce
+    var sqlTripClient = "SELECT COUNT(*) FROM Client_Trip WHERE IdTrip = @IdTrip";
+    await using (var commandTripClient = new SqlCommand(sqlTripClient, connection))
+    {
+        commandTripClient.Parameters.AddWithValue("@IdTrip", tripId);
+        var clientsCurrently = (int)await commandTripClient.ExecuteScalarAsync();
+        if (clientsCurrently >= maxClients)
+            throw new MaxPeopleException($"There are already {clientsCurrently} clients on the trip (max: {maxClients})");
+    }
+
+    // 4. Insert new client-trip relation
+    var sql = @"INSERT INTO Client_Trip (IdClient, IdTrip, RegisteredAt) 
+                VALUES (@IdClient, @IdTrip, @RegisteredAt)";
+    await using (var command = new SqlCommand(sql, connection))
+    {
         command.Parameters.AddWithValue("@IdClient", clientId);
         command.Parameters.AddWithValue("@IdTrip", tripId);
-        //zakładam, że RegistredAt oznacza ile dni temu zostało zarejestrowane z powodu tego, że w zad jest int
-        command.Parameters.AddWithValue("@RegisteredAt", 0);
+        command.Parameters.AddWithValue("@RegisteredAt", 0); // Assuming 0 is correct
         await command.ExecuteNonQueryAsync();
     }
+}
 
     //usuwamy klienta z wycieczki podając dane zarówno niego jak i wycieczki
     public async Task DeleteClientFromTripAsync(int clientId, int tripId)
